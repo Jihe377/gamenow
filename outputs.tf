@@ -29,3 +29,13 @@ output "connections_table_name" {
 output "battleship_table_name" {
   value = aws_dynamodb_table.battleship_games.name
 }
+
+output "terraform_state_bucket" {
+  description = "S3 bucket holding Terraform remote state (configure backend in main.tf)"
+  value       = aws_s3_bucket.terraform_state.bucket
+}
+
+output "terraform_lock_table" {
+  description = "DynamoDB table used for Terraform state locking"
+  value       = aws_dynamodb_table.terraform_lock.name
+}

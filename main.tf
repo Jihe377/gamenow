@@ -1,9 +1,20 @@
 terraform {
+  required_version = ">= 1.0"
+
   required_providers {
     aws = {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
+  }
+
+  # Remote state: created by aws_s3_bucket.terraform_state in backend_state.tf
+  backend "s3" {
+    bucket         = "game-platform-terraform-state-812835203753"
+    key            = "gamenow/terraform.tfstate"
+    region         = "us-west-2"
+    dynamodb_table = "game-platform-terraform-lock"
+    encrypt        = true
   }
 }
 

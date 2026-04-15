@@ -27,6 +27,27 @@ terraform init
 terraform apply
 ```
 
+### Remote state (S3 + DynamoDB lock)
+
+Terraform state is stored in **S3** with a **DynamoDB** lock table so multiple people can run `terraform apply` safely:
+
+| Resource | Purpose |
+|---|---|
+| S3 bucket `game-platform-terraform-state-<AWS_ACCOUNT_ID>` | Holds `gamenow/terraform.tfstate` |
+| DynamoDB `game-platform-terraform-lock` | Prevents concurrent applies |
+
+Configuration lives in `main.tf` (`backend "s3" { ... }`). The bucket is created by `backend_state.tf` using the pattern `${project}-terraform-state-${account_id}`.
+
+**New machine / teammate clone**
+
+1. Configure AWS credentials for the **same** account (same `aws configure` profile or env vars).
+2. `terraform init` — pulls state from S3 (no local `terraform.tfstate` in git).
+3. `terraform plan` / `terraform apply` as usual.
+
+**If you fork to another AWS account**, create the state bucket and lock table first (run `terraform apply` once with backend commented or use a bootstrap), then update the `bucket` value in `main.tf` to match `terraform output -raw terraform_state_bucket` for that account.
+
+**IAM:** Users need permission to read/write the state object in S3 and acquire/release locks in the DynamoDB table (typical `PowerUser` or a custom policy scoped to those resources).
+
 After `apply` completes, Terraform prints:
 - `rest_api_url`   — REST base URL
 - `websocket_url`  — WebSocket URL
@@ -161,6 +182,34 @@ Rules:
 
 ---
 
+### POST /rooms/{roomId}/start
+Host starts the game. Only the host can call this, and all seats must be filled.
+
+**Request body:**
+```json
+{
+  "playerId": "host-player-id",
+  "playerToken": "host-player-token"
+}
+```
+
+**Response 200:**
+```json
+{
+  "roomId": "4821",
+  "status": "setup",
+  "hostPlayerId": "uuid-..."
+}
+```
+
+Rules:
+- Room must be in `waiting` status with all seats filled
+- Only the host can start the game
+- Sets room status to `setup` and removes `expiresAt`
+- Broadcasts a `ROOM_STARTED` WebSocket event to all connections in the room
+
+---
+
 ## Battleship API reference
 
 ### GET /battleship/{roomId}?playerId=...&playerToken=...
@@ -248,7 +297,34 @@ Submit one shot for the current round.
 }
 ```
 
+### POST /battleship/{roomId}/forfeit
+End the current game and reset the room back to the waiting lobby.
+
+**Request body:**
+```json
+{
+  "playerId": "uuid-...",
+  "playerToken": "temporary-secret-token"
+}
+```
+
+**Response 200:**
+```json
+{
+  "roomId": "4821",
+  "status": "waiting"
+}
+```
+
 Rules:
+- Any player in the room can forfeit
+- Deletes the Battleship game record from DynamoDB
+- Resets room status to `waiting` and reinstates a 24-hour `expiresAt` TTL
+- Broadcasts a `ROOM_UPDATED` WebSocket event so both players return to the lobby
+
+---
+
+General Battleship rules:
 - The Battleship service is authoritative for setup, turns, hits, misses, and winners
 - When both players are ready, the room status changes to `playing` and `expiresAt` is removed
 - Each round allows at most one submitted shot per player
@@ -289,8 +365,12 @@ Send a chat message to everyone in the room.
 
 | type | When sent | Payload |
 |---|---|---|
+| `ROOM_JOINED` | Your WebSocket successfully joined the room | `{ roomId }` |
+| `ROOM_JOIN_ERROR` | WebSocket join validation failed | `{ error }` |
 | `PLAYER_JOINED` | Someone joins the room | `{ playerId, roomId }` |
 | `PLAYER_LEFT` | Someone disconnects or is explicitly removed | `{ connectionId, playerId, roomId }` |
+| `ROOM_STARTED` | Host started the game | `{ roomId, status }` |
+| `ROOM_UPDATED` | Room status changed (e.g. forfeit back to waiting) | `{ roomId, status }` |
 | `GAME_STATE` | After Battleship setup or a shot | `{ state: { ...viewer-specific battleship state... } }` |
 | `CHAT` | Chat message sent | `{ playerId, message, timestamp }` |
 
