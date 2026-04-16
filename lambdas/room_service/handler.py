@@ -48,8 +48,8 @@ def create_room(event):
     player_name = _validate_player_name(body.get("playerName"))
     if not player_name:
         return response(400, {"error": "playerName is required"})
-    if game_type not in ("uno", "battleship", "chess"):
-        return response(400, {"error": "gameType must be uno, battleship, or chess"})
+    if game_type not in ("uno", "battleship", "chess", "gomoku"):
+        return response(400, {"error": "gameType must be uno, battleship, chess, or gomoku"})
 
     table = dynamodb.Table(ROOMS_TABLE)
     player = _new_player(player_name)
@@ -143,8 +143,8 @@ def start_room(event, room_id):
         item = table.get_item(Key={"roomId": room_id}).get("Item")
         if not item:
             return response(404, {"error": "Room not found"})
-        if item.get("gameType") != "battleship":
-            return response(400, {"error": "Only battleship rooms support explicit start"})
+        if item.get("gameType") not in ("battleship", "chess"):
+            return response(400, {"error": "Only battleship and chess rooms support explicit start"})
         if item.get("status") != "waiting":
             return response(400, {"error": "Room has already started"})
 
@@ -328,7 +328,7 @@ def _public_player(player):
 
 
 def _max_players(game_type):
-    return {"uno": 4, "battleship": 2, "chess": 2}[game_type]
+    return {"uno": 4, "battleship": 2, "chess": 2, "gomoku": 2}[game_type]
 
 
 def _waiting_room_expires_at():
