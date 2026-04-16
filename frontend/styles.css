@@ -67,7 +67,7 @@
   /* Grid / Battleship — reuse --game-* names for other board games */
   --board-cell: rgba(226, 236, 246, 0.95);
   --board-cell-text: #58708c;
-  --board-ship: rgba(141, 183, 222, 0.95);
+  --board-ship: #3377c5;
   --board-hit: rgba(255, 144, 144, 0.95);
   --board-miss: rgba(190, 201, 214, 0.9);
   --board-pending: rgba(255, 224, 145, 0.95);
@@ -79,12 +79,14 @@
   --preview-invalid-border: rgba(200, 90, 70, 0.45);
   --preview-invalid-text: #8c2a1a;
 
-  /* Fleet — single ship color */
-  --ship-hue-0: #1a5599;
-  --ship-hue-1: #1a5599;
-  --ship-hue-2: #1a5599;
-  --ship-hue-3: #1a5599;
-  --ship-hue-4: #1a5599;
+  /* Fleet — single ship color (placement + battle) */
+  --ship-hue-0: #3377c5;
+  --ship-hue-1: #3377c5;
+  --ship-hue-2: #3377c5;
+  --ship-hue-3: #3377c5;
+  --ship-hue-4: #3377c5;
+  --ship-fleet-border: rgba(28, 72, 130, 0.55);
+  --ship-selected-ring: var(--danger);
 
   --shadow: 0 14px 36px rgba(79, 111, 145, 0.18);
   --shadow-inset: inset 0 1px 0 rgba(255, 255, 255, 0.7);
@@ -921,12 +923,14 @@ button {
 .board-cell.ship-hue-3,
 .board-cell.ship-hue-4 {
   background: var(--ship-hue-0);
-  border-color: rgba(12, 48, 100, 0.55);
+  border-color: var(--ship-fleet-border);
 }
 
 .board-cell.ship-selected {
-  outline: 3px solid var(--accent-strong);
-  outline-offset: -2px;
+  background: var(--ship-hue-0);
+  border-color: var(--ship-fleet-border);
+  outline: 2px solid var(--ship-selected-ring);
+  outline-offset: -1px;
   z-index: 1;
 }
 
@@ -969,6 +973,10 @@ button {
 
 .board-cell.clickable {
   cursor: pointer;
+}
+
+/* Empty sea only — do not override .ship / .ship-hue-* / .ship-selected (#3377c5) */
+.board-cell.clickable:not(.ship) {
   background: var(--board-clickable);
 }
 

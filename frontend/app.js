@@ -758,8 +758,10 @@ function rotateSelectedShip() {
     ...cur,
     orientation: cur.orientation === "horizontal" ? "vertical" : "horizontal",
   };
-  if (!canPlaceShip(pl, draftWithoutShipIndex(idx))) {
-    showToast("Cannot rotate here.", true);
+  try {
+    shipCellsFromPlacement(pl);
+  } catch {
+    showToast("Cannot rotate — ship would leave the board.", true);
     return;
   }
   state.placement.draft[idx] = pl;
@@ -789,7 +791,14 @@ async function submitShips() {
     return;
   }
   if (state.placement.draft.length !== FLEET.length) {
-    setStatus("Place all ships before locking your fleet.", true);
+    showToast("Place all ships before locking your fleet.", true);
+    return;
+  }
+  if (!isFleetPlacementValid(state.placement.draft)) {
+    showToast(
+      "Cannot lock: ships cannot overlap or touch (including diagonally). Adjust your fleet first.",
+      true,
+    );
     return;
   }
 
@@ -1225,8 +1234,10 @@ function tryMoveSelectedShipTo(row, col) {
     startCol: col,
     orientation: current.orientation,
   };
-  if (!canPlaceShip(pl, draftWithoutShipIndex(idx))) {
-    showToast("Cannot place the ship there.", true);
+  try {
+    shipCellsFromPlacement(pl);
+  } catch {
+    showToast("Cannot move — ship would leave the board.", true);
     return;
   }
   state.placement.draft[idx] = pl;
@@ -1309,6 +1320,18 @@ function cellsAre8Neighbors(cellA, cellB) {
   const [r1, c1] = cellA.split(",").map(Number);
   const [r2, c2] = cellB.split(",").map(Number);
   return Math.abs(r1 - r2) <= 1 && Math.abs(c1 - c2) <= 1;
+}
+
+function isFleetPlacementValid(draft) {
+  if (!draft || draft.length !== FLEET.length) {
+    return false;
+  }
+  for (let i = 0; i < draft.length; i += 1) {
+    if (!canPlaceShip(draft[i], draftWithoutShipIndex(i))) {
+      return false;
+    }
+  }
+  return true;
 }
 
 function canPlaceShip(placement, draft) {
