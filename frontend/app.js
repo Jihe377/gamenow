@@ -11,8 +11,17 @@ const SESSION_KEY = "gamenowBattleshipSession";
 const PROFILE_KEY = "gamenowBattleshipProfileName";
 const ANIMAL_EMOJIS = ["🐱", "🐶", "🐼", "🐯", "🦊", "🐻", "🐨", "🐸", "🐵", "🐧", "🦁", "🐰"];
 
+/** Baked-in API endpoints (same stack as `terraform output rest_api_url` / `websocket_url`). Override via hidden config panel if needed. */
+const DEFAULT_API_CONFIG = {
+  restUrl: "https://9tnuo0hn4k.execute-api.us-west-2.amazonaws.com/prod",
+  wsUrl: "wss://dzhq6f9ar8.execute-api.us-west-2.amazonaws.com/prod",
+};
+
 const state = {
-  config: { restUrl: "", wsUrl: "" },
+  config: {
+    restUrl: normalizeBaseUrl(DEFAULT_API_CONFIG.restUrl),
+    wsUrl: normalizeBaseUrl(DEFAULT_API_CONFIG.wsUrl),
+  },
   session: null,
   route: null,
   room: null,
@@ -25,8 +34,8 @@ const state = {
   profileName: "",
   chat: [],
   placement: {
-    orientation: "horizontal",
     draft: [],
+    selectedShipIndex: null,
   },
 };
 
@@ -48,8 +57,6 @@ function cacheElements() {
     "view-battleship",
     "view-room",
     "brand-button",
-    "status-message",
-    "connection-status",
     "home-continue-room",
     "toggle-rules",
     "rules-panel",
@@ -58,8 +65,7 @@ function cacheElements() {
     "create-room",
     "join-room",
     "room-page-title",
-    "room-page-subtitle",
-    "share-link-label",
+    "toast",
     "copy-room-link",
     "seat-strip",
     "room-waiting-actions",
@@ -75,15 +81,13 @@ function cacheElements() {
     "session-room-code",
     "session-seat",
     "session-player-id",
-    "session-connection",
     "room-meta",
     "player-list",
     "refresh-room",
     "leave-room",
     "end-game-btn",
-    "placement-next-ship",
-    "placement-orientation",
     "toggle-orientation",
+    "battle-status-line",
     "randomize-ships",
     "reset-ships",
     "submit-ships",
@@ -162,7 +166,7 @@ function bindEvents() {
   els.endGameBtn.addEventListener("click", forfeitGame);
   els.startGame.addEventListener("click", startRoom);
   els.leaveSeat.addEventListener("click", leaveRoom);
-  els.toggleOrientation.addEventListener("click", toggleOrientation);
+  els.toggleOrientation.addEventListener("click", rotateSelectedShip);
   els.randomizeShips.addEventListener("click", randomizeShips);
   els.resetShips.addEventListener("click", resetShips);
   els.submitShips.addEventListener("click", submitShips);
@@ -202,9 +206,12 @@ function handleGlobalKeydown(event) {
 
 function loadConfig() {
   const saved = readJson(CONFIG_KEY);
-  if (saved) {
-    state.config = saved;
-  }
+  const rest = (saved?.restUrl && String(saved.restUrl).trim()) || DEFAULT_API_CONFIG.restUrl;
+  const ws = (saved?.wsUrl && String(saved.wsUrl).trim()) || DEFAULT_API_CONFIG.wsUrl;
+  state.config = {
+    restUrl: normalizeBaseUrl(rest),
+    wsUrl: normalizeBaseUrl(ws),
+  };
   els.restUrl.value = state.config.restUrl;
   els.wsUrl.value = state.config.wsUrl;
 }
@@ -696,22 +703,15 @@ function sendChat() {
   els.chatInput.value = "";
 }
 
-function toggleOrientation() {
-  state.placement.orientation = state.placement.orientation === "horizontal" ? "vertical" : "horizontal";
-  renderPlacementSummary();
+function draftWithoutShipIndex(skipIndex) {
+  return state.placement.draft.filter((_, index) => index !== skipIndex);
 }
 
-function resetShips() {
-  state.placement.draft = [];
-  renderAll();
-}
-
-function randomizeShips() {
+function buildRandomFleetDraft() {
   const draft = [];
-
   for (const ship of FLEET) {
     let placed = false;
-    for (let attempt = 0; attempt < 100 && !placed; attempt += 1) {
+    for (let attempt = 0; attempt < 800 && !placed; attempt += 1) {
       const placement = {
         name: ship.name,
         startRow: Math.floor(Math.random() * 10),
@@ -724,12 +724,62 @@ function randomizeShips() {
       }
     }
     if (!placed) {
-      setStatus("Auto-placement failed. Please try again.", true);
-      return;
+      return null;
     }
   }
+  return draft;
+}
 
+function ensureSetupFleetRandomized() {
+  if (!canPlaceShips() || state.placement.draft.length > 0) {
+    return;
+  }
+  const draft = buildRandomFleetDraft();
+  if (draft) {
+    state.placement.draft = draft;
+    state.placement.selectedShipIndex = null;
+  }
+}
+
+function rotateSelectedShip() {
+  if (!canPlaceShips()) {
+    return;
+  }
+  const idx = state.placement.selectedShipIndex;
+  if (idx === null || idx === undefined) {
+    showToast("Select a ship on your board first.", true);
+    return;
+  }
+  const cur = state.placement.draft[idx];
+  if (!cur) {
+    return;
+  }
+  const pl = {
+    ...cur,
+    orientation: cur.orientation === "horizontal" ? "vertical" : "horizontal",
+  };
+  if (!canPlaceShip(pl, draftWithoutShipIndex(idx))) {
+    showToast("Cannot rotate here.", true);
+    return;
+  }
+  state.placement.draft[idx] = pl;
+  renderAll();
+}
+
+function resetShips() {
+  state.placement.draft = [];
+  state.placement.selectedShipIndex = null;
+  renderAll();
+}
+
+function randomizeShips() {
+  const draft = buildRandomFleetDraft();
+  if (!draft) {
+    showToast("Auto-placement failed. Try again.", true);
+    return;
+  }
   state.placement.draft = draft;
+  state.placement.selectedShipIndex = null;
   renderAll();
 }
 
@@ -753,6 +803,7 @@ async function submitShips() {
       },
     });
     await fetchRoom();
+    state.placement.selectedShipIndex = null;
     setStatus("Fleet locked. Waiting for the other player.");
     renderAll();
   } catch (error) {
@@ -794,6 +845,7 @@ function setSession(roomSession) {
   state.game = null;
   state.chat = [];
   state.placement.draft = [];
+  state.placement.selectedShipIndex = null;
   state.roomJoined = false;
   persistSession();
 }
@@ -805,6 +857,7 @@ function clearSession(message) {
   state.game = null;
   state.chat = [];
   state.placement.draft = [];
+  state.placement.selectedShipIndex = null;
   state.roomJoined = false;
   persistSession();
   renderAll();
@@ -845,10 +898,9 @@ function renderHome() {
 function renderRoomPageHeader() {
   const roomId = state.route?.roomId || "----";
   els.roomPageTitle.textContent = `Room code: ${roomId}`;
-  els.roomPageSubtitle.textContent = roomHeaderSubtitle();
-  els.shareLinkLabel.textContent = window.location.origin + roomPath(roomId);
   els.roomContinueCurrent.disabled = !state.session?.roomId;
-  els.copyRoomLink.textContent = "Invite Friend";
+  els.copyRoomLink.textContent = "Invite";
+  els.copyRoomLink.classList.toggle("hidden", state.route?.name !== "room");
   els.leaveRoom.classList.add("hidden");
 }
 
@@ -867,6 +919,9 @@ function renderConfigPanel() {
 
 function renderRulesPanel() {
   els.rulesPanel.classList.toggle("hidden", !state.rulesOpen);
+  if (els.toggleRules) {
+    els.toggleRules.setAttribute("aria-expanded", String(state.rulesOpen));
+  }
 }
 
 function renderSessionSummary() {
@@ -875,7 +930,6 @@ function renderSessionSummary() {
   els.sessionRoomCode.textContent = state.session?.roomId || state.route?.roomId || "----";
   els.sessionSeat.textContent = seatLabel();
   els.sessionPlayerId.textContent = sessionIdentityLabel();
-  els.sessionConnection.textContent = state.session ? (state.roomJoined ? "Connected" : "Saved") : "Idle";
 }
 
 function renderRoom() {
@@ -895,7 +949,7 @@ function renderRoom() {
     });
   });
   els.roomMeta.innerHTML = `
-    <div class="mode-pill">Mode: Battleship Duel</div>
+    <div class="mode-pill">Mode: Battleship</div>
     <div>${escapeHtml(roomStateLine())}</div>
   `;
   renderWaitingActions();
@@ -905,9 +959,14 @@ function renderRoom() {
 }
 
 function renderGame() {
+  if (els.battleStatusLine) {
+    els.battleStatusLine.classList.add("hidden");
+  }
+
   if (!isRoomRoute()) {
     els.battleTitle.textContent = "Waiting to Enter";
-    els.roundPill.textContent = "Round -";
+    els.roundPill.classList.add("hidden");
+    els.roundPill.textContent = "";
     els.gameSummary.innerHTML = `
       <div class="stage-summary-line">Open a room link to enter the game.</div>
       <div class="stage-summary-subline">Room links use the format ${escapeHtml(state.route?.roomId ? roomPath(state.route.roomId) : "/battleship/1234")}.</div>
@@ -921,7 +980,8 @@ function renderGame() {
 
   if (!isViewingLiveRoom()) {
     els.battleTitle.textContent = state.room ? "Room Preview" : "Loading Room";
-    els.roundPill.textContent = "Round -";
+    els.roundPill.classList.add("hidden");
+    els.roundPill.textContent = "";
     els.gameSummary.innerHTML = `
       <div class="stage-summary-line">Join this room to enter the live match.</div>
       <div class="stage-summary-subline">${escapeHtml(state.room ? roomStateLine() : "Loading public room state.")}</div>
@@ -936,6 +996,7 @@ function renderGame() {
 
   if (isWaitingRoomStage()) {
     els.battleTitle.textContent = isHostPlayer() ? "Waiting Room" : "Choose a Seat";
+    els.roundPill.classList.remove("hidden");
     els.roundPill.textContent = `Players ${state.room?.players?.length || 0}/2`;
     els.gameSummary.innerHTML = `
       <div class="stage-summary-line">${escapeHtml(waitingRoomHeadline())}</div>
@@ -947,14 +1008,15 @@ function renderGame() {
     return;
   }
 
-  els.battleTitle.textContent = battleTitle();
-  els.roundPill.textContent = `Round ${state.game?.roundNumber || 1}`;
+  els.roundPill.classList.add("hidden");
+  els.roundPill.textContent = "";
   els.ownBoardTitle.textContent = "Your Board";
   els.opponentBoardTitle.textContent = state.game?.opponentBoard?.playerName
     ? `${state.game.opponentBoard.playerName}'s Board`
     : "Attack Grid";
 
   if (!state.game) {
+    els.battleTitle.textContent = "Loading";
     els.gameSummary.innerHTML = `
       <div class="stage-summary-line">Loading match state...</div>
       <div class="stage-summary-subline">Please wait while the room syncs.</div>
@@ -965,16 +1027,28 @@ function renderGame() {
     return;
   }
 
-  els.gameSummary.innerHTML = `
-    <div class="stage-summary-line">${escapeHtml(combatStatus())}</div>
-    <div class="stage-summary-subline">${escapeHtml(stageSubline())}</div>
-  `;
-
   const setupPhase = state.game.phase === "setup";
   const playingPhase = state.game.phase === "playing" || state.game.phase === "finished";
   els.ownBoardPanel.classList.remove("hidden");
   els.placementPanel.classList.toggle("hidden", !setupPhase);
   els.opponentPanel.classList.toggle("hidden", !playingPhase);
+
+  if (setupPhase) {
+    els.battleTitle.textContent = "Deploy Fleet";
+    els.gameSummary.innerHTML = `<div class="stage-summary-subline">${escapeHtml(stageSubline())}</div>`;
+  } else {
+    if (state.game.phase === "finished") {
+      els.battleTitle.textContent =
+        renderWinnerLabel() === "Draw" ? "Match ended in a draw" : `${renderWinnerLabel()} won the match`;
+    } else {
+      els.battleTitle.textContent = "Battleship";
+    }
+    els.gameSummary.innerHTML = "";
+    if (els.battleStatusLine) {
+      els.battleStatusLine.textContent = middleRackStatus();
+      els.battleStatusLine.classList.remove("hidden");
+    }
+  }
 }
 
 function renderWaitingActions() {
@@ -989,9 +1063,6 @@ function renderWaitingActions() {
   els.startGame.classList.toggle("hidden", !host);
   els.startGame.disabled = !full;
   els.leaveSeat.disabled = false;
-  els.waitingActionNote.textContent = host
-    ? (full ? "All seats are filled. You can start the game now." : "Invite one more player. Start unlocks when both seats are filled.")
-    : "The host will start the game after both seats are filled.";
 }
 
 function renderChat() {
@@ -1001,45 +1072,102 @@ function renderChat() {
 }
 
 function renderPlacementSummary() {
-  const nextShip = FLEET[state.placement.draft.length];
-  els.placementNextShip.textContent = nextShip
-    ? `Next ship: ${nextShip.name} (${nextShip.size})`
-    : "All ships placed. Lock your fleet.";
-  els.placementOrientation.textContent = `Orientation: ${state.placement.orientation}`;
+  if (els.toggleOrientation) {
+    els.toggleOrientation.disabled = !canPlaceShips() || state.placement.selectedShipIndex === null;
+  }
 }
 
 function renderBoards() {
+  ensureSetupFleetRandomized();
   renderOwnBoard();
   renderOpponentBoard();
 }
 
+function shipHueIndex(shipName) {
+  const index = FLEET.findIndex((ship) => ship.name === shipName);
+  return index >= 0 ? index : 0;
+}
+
+function middleRackStatus() {
+  if (!state.game) {
+    return "";
+  }
+  if (state.game.phase === "finished") {
+    return "Match over";
+  }
+  if (state.game.phase !== "playing") {
+    return "";
+  }
+  const raw = state.game.opponentBoard?.playerName || "Opponent";
+  const opponentName = stripLeadingEmoji(raw) || raw;
+  const meSubmitted = state.game.shotSubmittedThisRound;
+  const oppSubmitted = state.game.currentRound?.opponentSubmitted;
+  if (!meSubmitted && !oppSubmitted) {
+    return `Waiting For You and ${opponentName}`;
+  }
+  if (!meSubmitted && oppSubmitted) {
+    return "Waiting For You";
+  }
+  if (meSubmitted && !oppSubmitted) {
+    return `Waiting For ${opponentName}`;
+  }
+  return "Resolving round…";
+}
+
 function renderOwnBoard() {
   if (!isRoomRoute()) {
-    els.ownBoard.innerHTML = buildBoardHtml(() => ({ classes: ["board-cell"], label: "", action: "" }));
+    els.ownBoard.innerHTML = buildBoardHtml(() => ({ classes: ["board-cell"], label: "", action: "", bow: false }));
     return;
   }
 
   if (!isViewingLiveRoom()) {
-    els.ownBoard.innerHTML = buildBoardHtml(() => ({ classes: ["board-cell"], label: "", action: "" }));
+    els.ownBoard.innerHTML = buildBoardHtml(() => ({ classes: ["board-cell"], label: "", action: "", bow: false }));
     return;
   }
 
   const shipCells = new Map();
-  const placements = canPlaceShips() ? draftShipsAsPublic() : (state.game?.ownBoard?.ships || []);
-  placements.forEach((ship) => ship.cells.forEach((cell) => shipCells.set(cell, ship)));
+  const placements = canPlaceShips() ? draftShipsAsPublic() : state.game?.ownBoard?.ships || [];
+  placements.forEach((ship) => ship.cells.forEach((c) => shipCells.set(c, ship)));
 
   const received = new Map();
   (state.game?.ownBoard?.shotsReceived || []).forEach((shot) => received.set(shot.cell, shot));
+
+  const draftCellMeta = new Map();
+  if (canPlaceShips()) {
+    state.placement.draft.forEach((pl, shipIndex) => {
+      const cells = shipCellsFromPlacement(pl);
+      const hue = shipHueIndex(pl.name);
+      cells.forEach((c, idx) => {
+        draftCellMeta.set(c, { shipIndex, hue, isBow: idx === 0 });
+      });
+    });
+  }
 
   els.ownBoard.innerHTML = buildBoardHtml((row, col) => {
     const cell = `${row},${col}`;
     const classes = ["board-cell"];
     let label = "";
+    let bow = false;
 
-    if (shipCells.has(cell)) {
-      classes.push("ship");
-      label = "S";
+    if (canPlaceShips() && draftCellMeta.has(cell)) {
+      const meta = draftCellMeta.get(cell);
+      classes.push("ship", `ship-hue-${meta.hue}`);
+      if (meta.isBow && !received.has(cell)) {
+        bow = true;
+      }
+      if (state.placement.selectedShipIndex === meta.shipIndex) {
+        classes.push("ship-selected");
+      }
+    } else if (shipCells.has(cell)) {
+      const pub = shipCells.get(cell);
+      const hue = shipHueIndex(pub.name);
+      classes.push("ship", `ship-hue-${hue}`);
+      const order = pub.cells || [];
+      if (order[0] === cell && !received.has(cell)) {
+        bow = true;
+      }
     }
+
     if (received.has(cell)) {
       const shot = received.get(cell);
       classes.push(shot.result === "hit" ? "hit" : "miss");
@@ -1052,29 +1180,74 @@ function renderOwnBoard() {
     return {
       classes,
       label,
+      bow,
       action: canPlaceShips() ? `data-own-cell="${row},${col}"` : "",
     };
   });
 
-  els.ownBoard.querySelectorAll("[data-own-cell]").forEach((cell) => {
-    cell.addEventListener("click", () => placeShipAt(cell.dataset.ownCell));
+  els.ownBoard.querySelectorAll("[data-own-cell]").forEach((cellEl) => {
+    cellEl.addEventListener("click", () => handleOwnBoardPlacementClick(cellEl.dataset.ownCell));
   });
+}
+
+function handleOwnBoardPlacementClick(cellId) {
+  if (!canPlaceShips()) {
+    return;
+  }
+  const [row, col] = cellId.split(",").map(Number);
+  const cell = `${row},${col}`;
+  for (let i = 0; i < state.placement.draft.length; i += 1) {
+    const cells = shipCellsFromPlacement(state.placement.draft[i]);
+    if (cells.includes(cell)) {
+      state.placement.selectedShipIndex = i;
+      renderPlacementSummary();
+      renderOwnBoard();
+      return;
+    }
+  }
+  if (state.placement.selectedShipIndex !== null && state.placement.selectedShipIndex !== undefined) {
+    tryMoveSelectedShipTo(row, col);
+  }
+}
+
+function tryMoveSelectedShipTo(row, col) {
+  const idx = state.placement.selectedShipIndex;
+  if (idx === null || idx === undefined) {
+    return;
+  }
+  const current = state.placement.draft[idx];
+  if (!current) {
+    return;
+  }
+  const pl = {
+    name: current.name,
+    startRow: row,
+    startCol: col,
+    orientation: current.orientation,
+  };
+  if (!canPlaceShip(pl, draftWithoutShipIndex(idx))) {
+    showToast("Cannot place the ship there.", true);
+    return;
+  }
+  state.placement.draft[idx] = pl;
+  renderAll();
 }
 
 function renderOpponentBoard() {
   if (!isRoomRoute()) {
-    els.opponentBoard.innerHTML = buildBoardHtml(() => ({ classes: ["board-cell"], label: "", action: "" }));
+    els.opponentBoard.innerHTML = buildBoardHtml(() => ({ classes: ["board-cell"], label: "", action: "", bow: false }));
     return;
   }
 
   if (!isViewingLiveRoom()) {
-    els.opponentBoard.innerHTML = buildBoardHtml(() => ({ classes: ["board-cell"], label: "", action: "" }));
+    els.opponentBoard.innerHTML = buildBoardHtml(() => ({ classes: ["board-cell"], label: "", action: "", bow: false }));
     return;
   }
 
   const fired = new Map();
   (state.game?.opponentBoard?.shotsFired || []).forEach((shot) => fired.set(shot.cell, shot));
-  const pendingCell = state.game?.currentRound?.yourShot?.cell;
+  const yourShot = state.game?.currentRound?.yourShot;
+  const pendingResult = yourShot?.result;
 
   els.opponentBoard.innerHTML = buildBoardHtml((row, col) => {
     const cell = `${row},${col}`;
@@ -1085,9 +1258,9 @@ function renderOpponentBoard() {
     if (shot) {
       classes.push(shot.result === "hit" ? "hit" : "miss");
       label = shot.result === "hit" ? "X" : "•";
-    } else if (pendingCell === cell) {
-      classes.push("pending");
-      label = "…";
+    } else if (yourShot && yourShot.cell === cell && pendingResult) {
+      classes.push(pendingResult === "hit" ? "hit" : "miss");
+      label = pendingResult === "hit" ? "X" : "•";
     } else if (canFire()) {
       classes.push("clickable");
     }
@@ -1095,14 +1268,15 @@ function renderOpponentBoard() {
     return {
       classes,
       label,
-      action: canFire() && !shot && pendingCell !== cell ? `data-opponent-cell="${row},${col}"` : "",
+      bow: false,
+      action: canFire() && !shot && !(yourShot && yourShot.cell === cell) ? `data-opponent-cell="${row},${col}"` : "",
     };
   });
 
-  els.opponentBoard.querySelectorAll("[data-opponent-cell]").forEach((cell) => {
-    cell.addEventListener("click", () => {
-      const [row, col] = cell.dataset.opponentCell.split(",").map(Number);
-      fireAt(row, col);
+  els.opponentBoard.querySelectorAll("[data-opponent-cell]").forEach((cellEl) => {
+    cellEl.addEventListener("click", () => {
+      const [r, c] = cellEl.dataset.opponentCell.split(",").map(Number);
+      fireAt(r, c);
     });
   });
 }
@@ -1112,7 +1286,9 @@ function buildBoardHtml(cellRenderer) {
   for (let row = 0; row < 10; row += 1) {
     for (let col = 0; col < 10; col += 1) {
       const rendered = cellRenderer(row, col);
-      cells.push(`<div class="${rendered.classes.join(" ")}" ${rendered.action}>${rendered.label}</div>`);
+      const bow = rendered.bow ? '<span class="ship-bow-ring" aria-hidden="true"></span>' : "";
+      const text = rendered.label ? escapeHtml(rendered.label) : "";
+      cells.push(`<div class="${rendered.classes.join(" ")}" ${rendered.action}>${bow}${text}</div>`);
     }
   }
   return cells.join("");
@@ -1126,34 +1302,33 @@ function draftShipsAsPublic() {
   }));
 }
 
-function placeShipAt(cellId) {
-  const nextShip = FLEET[state.placement.draft.length];
-  if (!nextShip) {
-    return;
+function cellsAre8Neighbors(cellA, cellB) {
+  if (cellA === cellB) {
+    return true;
   }
-
-  const [startRow, startCol] = cellId.split(",").map(Number);
-  const placement = {
-    name: nextShip.name,
-    startRow,
-    startCol,
-    orientation: state.placement.orientation,
-  };
-
-  if (!canPlaceShip(placement, state.placement.draft)) {
-    setStatus("That ship cannot be placed there.", true);
-    return;
-  }
-
-  state.placement.draft.push(placement);
-  renderAll();
+  const [r1, c1] = cellA.split(",").map(Number);
+  const [r2, c2] = cellB.split(",").map(Number);
+  return Math.abs(r1 - r2) <= 1 && Math.abs(c1 - c2) <= 1;
 }
 
 function canPlaceShip(placement, draft) {
   try {
     const cells = shipCellsFromPlacement(placement);
     const occupied = new Set(draft.flatMap(shipCellsFromPlacement));
-    return cells.every((cell) => !occupied.has(cell));
+    if (!cells.every((cell) => !occupied.has(cell))) {
+      return false;
+    }
+    for (const other of draft) {
+      const otherCells = shipCellsFromPlacement(other);
+      for (const c of cells) {
+        for (const o of otherCells) {
+          if (cellsAre8Neighbors(c, o)) {
+            return false;
+          }
+        }
+      }
+    }
+    return true;
   } catch (error) {
     return false;
   }
@@ -1355,24 +1530,6 @@ function renderSeatCard(player, seatNumber, room) {
   `;
 }
 
-function roomHeaderSubtitle() {
-  if (!isRoomRoute()) {
-    return "Open this room link to invite your friend.";
-  }
-  if (!state.room) {
-    return "Loading room state...";
-  }
-  if (isWaitingRoomStage()) {
-    return isViewingLiveRoom()
-      ? "Seat players first, then let the host start the match."
-      : "Choose a seat, enter your name, and join this room.";
-  }
-  if (isViewingLiveRoom()) {
-    return stageSubline();
-  }
-  return "Pick a seat and join this room to start playing.";
-}
-
 function roomStateLine() {
   if (!state.room) {
     return "Loading room state...";
@@ -1398,18 +1555,14 @@ function waitingRoomSubline() {
   if (!isViewingLiveRoom()) {
     return "Enter a name below and tap Join to sit down.";
   }
-  return isHostPlayer()
-    ? "You are the host. Leave your seat at any time, or start after seat 2 is filled."
-    : "Your seat is saved. The host will unlock fleet placement once both players are in.";
+  if (hasAllPlayers()) {
+    return "";
+  }
+  return "Pick a seat and join this room to start playing.";
 }
 
 function stageSubline() {
-  if (!state.game) {
-    return "Waiting for the game state to load.";
-  }
-  if (isWaitingRoomStage() || state.game.phase === "waiting_for_players") {
-    return "Invite one more player to begin.";
-  }
+
   if (state.game.phase === "setup") {
     return canPlaceShips()
       ? "Arrange your fleet and lock your layout."
@@ -1466,7 +1619,7 @@ function ensureConfigured() {
     localStorage.setItem(CONFIG_KEY, JSON.stringify(state.config));
   }
   if (!state.config.restUrl || !state.config.wsUrl) {
-    throw new Error("Open the hidden config panel and save both REST and WebSocket URLs first.");
+    throw new Error("REST and WebSocket base URLs are not configured.");
   }
 }
 
@@ -1485,6 +1638,21 @@ function generateDefaultPlayerName() {
   return ANIMAL_EMOJIS[Math.floor(Math.random() * ANIMAL_EMOJIS.length)];
 }
 
+let toastHideTimer = null;
+
+function showToast(message, isError = false) {
+  if (!els.toast) {
+    return;
+  }
+  els.toast.textContent = message;
+  els.toast.classList.toggle("toast--error", isError);
+  els.toast.classList.remove("hidden");
+  window.clearTimeout(toastHideTimer);
+  toastHideTimer = window.setTimeout(() => {
+    els.toast.classList.add("hidden");
+  }, 4200);
+}
+
 async function copyRoomLink() {
   if (state.route?.name !== "room") {
     return;
@@ -1492,20 +1660,15 @@ async function copyRoomLink() {
   const fullUrl = `${window.location.origin}${roomPath(state.route.roomId)}`;
   try {
     await navigator.clipboard.writeText(fullUrl);
-    setStatus("Room link copied.");
+    showToast("Link copied. Share with your friends.");
   } catch (error) {
-    setStatus("Copy failed. Please copy the current URL manually.", true);
+    showToast("Could not copy. Please copy the address from your browser.", true);
   }
 }
 
-function setStatus(message, isError = false) {
-  els.statusMessage.textContent = message;
-  els.statusMessage.style.color = isError ? "#b95757" : "#718198";
-}
+function setStatus(_message, _isError = false) {}
 
-function setConnectionStatus(message) {
-  els.connectionStatus.textContent = message;
-}
+function setConnectionStatus(_message) {}
 
 function shortId(value) {
   return value ? value.slice(0, 8) : "";

@@ -80,6 +80,14 @@ resource "aws_s3_object" "frontend_styles" {
   content_type = "text/css; charset=utf-8"
 }
 
+resource "aws_s3_object" "frontend_logo" {
+  bucket       = aws_s3_bucket.frontend.id
+  key          = "gamenow-logo.png"
+  source       = "${path.module}/frontend/gamenow-logo.png"
+  etag         = filemd5("${path.module}/frontend/gamenow-logo.png")
+  content_type = "image/png"
+}
+
 resource "aws_cloudfront_origin_access_control" "frontend" {
   name                              = "${var.project}-frontend-oac"
   description                       = "OAC for GameNow frontend bucket"

@@ -63,6 +63,7 @@ Static frontend files:
 - `frontend/index.html`
 - `frontend/app.js`
 - `frontend/styles.css`
+- `frontend/DESIGN_TOKENS.md` — shared CSS color tokens for all games
 
 Terraform now uploads those files to S3 and serves them through CloudFront.
 Deep links such as `/battleship/4821` are configured to fall back to `index.html`, so refreshing a room URL still loads the frontend correctly.

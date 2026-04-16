@@ -196,11 +196,13 @@ def _apply_fire(game, room, player_id, row, col):
     if not target_player_id:
         raise ValueError("Waiting for an opponent")
 
+    live_ship = _find_ship_at_cell(game["players"][target_player_id]["ships"], cell)
     round_shots[player_id] = {
         "cell": cell,
         "row": row,
         "col": col,
         "targetPlayerId": target_player_id,
+        "result": "hit" if live_ship else "miss",
     }
 
     if len(round_shots) == len(game["playerOrder"]):
@@ -462,6 +464,22 @@ def _broadcast_game_state(game, room):
             dynamodb.Table(CONNECTIONS_TABLE).delete_item(Key={"connectionId": connection["connectionId"]})
 
 
+def _assert_ships_not_adjacent(ships):
+    """No cell of one ship may be 8-neighbor-adjacent to a cell of another ship."""
+    for i, ship_a in enumerate(ships):
+        for j, ship_b in enumerate(ships):
+            if i >= j:
+                continue
+            for ca in ship_a["cells"]:
+                ra, ca_col = map(int, ca.split(","))
+                for cb in ship_b["cells"]:
+                    rb, cb_col = map(int, cb.split(","))
+                    if abs(ra - rb) <= 1 and abs(ca_col - cb_col) <= 1:
+                        raise ValueError(
+                            "Ships cannot be adjacent (including diagonally); leave a gap between ships"
+                        )
+
+
 def _build_ships_from_placements(placements):
     if len(placements) != len(STANDARD_FLEET):
         raise ValueError("placements must include exactly five ships")
@@ -506,6 +524,8 @@ def _build_ships_from_placements(placements):
     missing = sorted(set(FLEET_BY_NAME) - seen_names)
     if missing:
         raise ValueError(f"Missing ship placements: {', '.join(missing)}")
+
+    _assert_ships_not_adjacent(ships)
     return ships
 
 
