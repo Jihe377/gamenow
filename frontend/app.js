@@ -1179,8 +1179,14 @@ function renderOwnBoard() {
 
     if (received.has(cell)) {
       const shot = received.get(cell);
-      classes.push(shot.result === "hit" ? "hit" : "miss");
-      label = shot.result === "hit" ? "X" : "•";
+      if (shot.result === "miss") {
+        classes.push("miss");
+        label = "•";
+      } else {
+        classes.push("hit");
+        const pub = shipCells.get(cell);
+        label = pub?.sunk ? "X" : "";
+      }
     }
     if (canPlaceShips()) {
       classes.push("clickable");
@@ -1259,6 +1265,11 @@ function renderOpponentBoard() {
   (state.game?.opponentBoard?.shotsFired || []).forEach((shot) => fired.set(shot.cell, shot));
   const yourShot = state.game?.currentRound?.yourShot;
   const pendingResult = yourShot?.result;
+  const opponentSunkShipNames = new Set(
+    (state.game?.opponentBoard?.shotsFired || [])
+      .filter((s) => s.result === "hit" && s.sunk && s.shipName)
+      .map((s) => s.shipName),
+  );
 
   els.opponentBoard.innerHTML = buildBoardHtml((row, col) => {
     const cell = `${row},${col}`;
@@ -1268,10 +1279,14 @@ function renderOpponentBoard() {
 
     if (shot) {
       classes.push(shot.result === "hit" ? "hit" : "miss");
-      label = shot.result === "hit" ? "X" : "•";
+      if (shot.result === "hit") {
+        label = shot.shipName && opponentSunkShipNames.has(shot.shipName) ? "X" : "";
+      } else {
+        label = "•";
+      }
     } else if (yourShot && yourShot.cell === cell && pendingResult) {
       classes.push(pendingResult === "hit" ? "hit" : "miss");
-      label = pendingResult === "hit" ? "X" : "•";
+      label = pendingResult === "hit" ? "" : "•";
     } else if (canFire()) {
       classes.push("clickable");
     }

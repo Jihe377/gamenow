@@ -629,13 +629,14 @@ button {
   top: 6px;
   right: 6px;
   z-index: 10;
-  width: 36px;
-  height: 36px;
+  min-height: 36px;
+  padding: 0 14px;
+  width: auto;
   border: none;
   border-radius: 8px;
   background: var(--danger);
   color: var(--on-accent);
-  font-size: 18px;
+  font-size: 14px;
   font-weight: 700;
   line-height: 1;
   cursor: pointer;
