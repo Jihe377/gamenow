@@ -246,6 +246,32 @@ resource "aws_dynamodb_table" "battleship_games" {
   tags = { Project = var.project }
 }
 
+resource "aws_dynamodb_table" "chess_games" {
+  name         = "${var.project}-chess-games"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "roomId"
+
+  attribute {
+    name = "roomId"
+    type = "S"
+  }
+
+  tags = { Project = var.project }
+}
+
+resource "aws_dynamodb_table" "gomoku_games" {
+  name         = "${var.project}-gomoku-games"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "roomId"
+
+  attribute {
+    name = "roomId"
+    type = "S"
+  }
+
+  tags = { Project = var.project }
+}
+
 # ── IAM role shared by all Lambdas ──────────────────────────────────────────
 
 resource "aws_iam_role" "lambda_exec" {
@@ -279,6 +305,8 @@ resource "aws_iam_role_policy" "lambda_policy" {
           aws_dynamodb_table.connections.arn,
           "${aws_dynamodb_table.connections.arn}/index/roomId-index",
           aws_dynamodb_table.battleship_games.arn,
+          aws_dynamodb_table.chess_games.arn,
+          aws_dynamodb_table.gomoku_games.arn,
         ]
       },
       {
@@ -371,6 +399,64 @@ resource "aws_lambda_function" "chat_service" {
   environment {
     variables = {
       CONNECTIONS_TABLE = aws_dynamodb_table.connections.name
+      WS_ENDPOINT       = "https://${aws_apigatewayv2_api.websocket.id}.execute-api.${var.aws_region}.amazonaws.com/${aws_apigatewayv2_stage.websocket.name}"
+    }
+  }
+
+  tags = { Project = var.project }
+}
+
+# ── Lambda: chess_service ────────────────────────────────────────────────────
+
+data "archive_file" "chess_service" {
+  type        = "zip"
+  source_dir  = "${path.module}/lambdas/chess_service"
+  output_path = "${path.module}/zips/chess_service.zip"
+}
+
+resource "aws_lambda_function" "chess_service" {
+  function_name    = "${var.project}-chess-service"
+  filename         = data.archive_file.chess_service.output_path
+  source_code_hash = data.archive_file.chess_service.output_base64sha256
+  runtime          = "python3.12"
+  handler          = "handler.lambda_handler"
+  role             = aws_iam_role.lambda_exec.arn
+  timeout          = 15
+
+  environment {
+    variables = {
+      ROOMS_TABLE       = aws_dynamodb_table.rooms.name
+      CONNECTIONS_TABLE = aws_dynamodb_table.connections.name
+      CHESS_TABLE       = aws_dynamodb_table.chess_games.name
+      WS_ENDPOINT       = "https://${aws_apigatewayv2_api.websocket.id}.execute-api.${var.aws_region}.amazonaws.com/${aws_apigatewayv2_stage.websocket.name}"
+    }
+  }
+
+  tags = { Project = var.project }
+}
+
+# ── Lambda: gomoku_service ────────────────────────────────────────────────────
+
+data "archive_file" "gomoku_service" {
+  type        = "zip"
+  source_file = "${path.module}/lambdas/gomoku_service/handler.py"
+  output_path = "${path.module}/zips/gomoku_service.zip"
+}
+
+resource "aws_lambda_function" "gomoku_service" {
+  function_name    = "${var.project}-gomoku-service"
+  filename         = data.archive_file.gomoku_service.output_path
+  source_code_hash = data.archive_file.gomoku_service.output_base64sha256
+  runtime          = "python3.12"
+  handler          = "handler.lambda_handler"
+  role             = aws_iam_role.lambda_exec.arn
+  timeout          = 10
+
+  environment {
+    variables = {
+      ROOMS_TABLE       = aws_dynamodb_table.rooms.name
+      CONNECTIONS_TABLE = aws_dynamodb_table.connections.name
+      GOMOKU_TABLE      = aws_dynamodb_table.gomoku_games.name
       WS_ENDPOINT       = "https://${aws_apigatewayv2_api.websocket.id}.execute-api.${var.aws_region}.amazonaws.com/${aws_apigatewayv2_stage.websocket.name}"
     }
   }

@@ -612,6 +612,580 @@ resource "aws_api_gateway_integration_response" "options_battleship_fire" {
   }
 }
 
+# ── Chess resources ───────────────────────────────────────────────────────────
+
+resource "aws_api_gateway_resource" "chess" {
+  rest_api_id = aws_api_gateway_rest_api.rest.id
+  parent_id   = aws_api_gateway_rest_api.rest.root_resource_id
+  path_part   = "chess"
+}
+
+resource "aws_api_gateway_resource" "chess_room_id" {
+  rest_api_id = aws_api_gateway_rest_api.rest.id
+  parent_id   = aws_api_gateway_resource.chess.id
+  path_part   = "{roomId}"
+}
+
+resource "aws_api_gateway_resource" "chess_ready" {
+  rest_api_id = aws_api_gateway_rest_api.rest.id
+  parent_id   = aws_api_gateway_resource.chess_room_id.id
+  path_part   = "ready"
+}
+
+resource "aws_api_gateway_resource" "chess_move" {
+  rest_api_id = aws_api_gateway_rest_api.rest.id
+  parent_id   = aws_api_gateway_resource.chess_room_id.id
+  path_part   = "move"
+}
+
+resource "aws_api_gateway_resource" "chess_draw" {
+  rest_api_id = aws_api_gateway_rest_api.rest.id
+  parent_id   = aws_api_gateway_resource.chess_room_id.id
+  path_part   = "draw"
+}
+
+resource "aws_api_gateway_resource" "chess_resign" {
+  rest_api_id = aws_api_gateway_rest_api.rest.id
+  parent_id   = aws_api_gateway_resource.chess_room_id.id
+  path_part   = "resign"
+}
+
+# GET /chess/{roomId}
+resource "aws_api_gateway_method" "get_chess_state" {
+  rest_api_id   = aws_api_gateway_rest_api.rest.id
+  resource_id   = aws_api_gateway_resource.chess_room_id.id
+  http_method   = "GET"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_integration" "get_chess_state" {
+  rest_api_id             = aws_api_gateway_rest_api.rest.id
+  resource_id             = aws_api_gateway_resource.chess_room_id.id
+  http_method             = aws_api_gateway_method.get_chess_state.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.chess_service.invoke_arn
+}
+
+resource "aws_api_gateway_method" "options_chess_room" {
+  rest_api_id   = aws_api_gateway_rest_api.rest.id
+  resource_id   = aws_api_gateway_resource.chess_room_id.id
+  http_method   = "OPTIONS"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_integration" "options_chess_room" {
+  rest_api_id = aws_api_gateway_rest_api.rest.id
+  resource_id = aws_api_gateway_resource.chess_room_id.id
+  http_method = aws_api_gateway_method.options_chess_room.http_method
+  type        = "MOCK"
+  request_templates = { "application/json" = "{\"statusCode\": 200}" }
+}
+
+resource "aws_api_gateway_method_response" "options_chess_room" {
+  rest_api_id = aws_api_gateway_rest_api.rest.id
+  resource_id = aws_api_gateway_resource.chess_room_id.id
+  http_method = aws_api_gateway_method.options_chess_room.http_method
+  status_code = "200"
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = true
+    "method.response.header.Access-Control-Allow-Methods" = true
+    "method.response.header.Access-Control-Allow-Origin"  = true
+  }
+}
+
+resource "aws_api_gateway_integration_response" "options_chess_room" {
+  rest_api_id = aws_api_gateway_rest_api.rest.id
+  resource_id = aws_api_gateway_resource.chess_room_id.id
+  http_method = aws_api_gateway_method.options_chess_room.http_method
+  status_code = aws_api_gateway_method_response.options_chess_room.status_code
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = "'Content-Type'"
+    "method.response.header.Access-Control-Allow-Methods" = "'OPTIONS,GET'"
+    "method.response.header.Access-Control-Allow-Origin"  = "'*'"
+  }
+}
+
+# POST /chess/{roomId}/ready
+resource "aws_api_gateway_method" "post_chess_ready" {
+  rest_api_id   = aws_api_gateway_rest_api.rest.id
+  resource_id   = aws_api_gateway_resource.chess_ready.id
+  http_method   = "POST"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_integration" "post_chess_ready" {
+  rest_api_id             = aws_api_gateway_rest_api.rest.id
+  resource_id             = aws_api_gateway_resource.chess_ready.id
+  http_method             = aws_api_gateway_method.post_chess_ready.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.chess_service.invoke_arn
+}
+
+resource "aws_api_gateway_method" "options_chess_ready" {
+  rest_api_id   = aws_api_gateway_rest_api.rest.id
+  resource_id   = aws_api_gateway_resource.chess_ready.id
+  http_method   = "OPTIONS"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_integration" "options_chess_ready" {
+  rest_api_id = aws_api_gateway_rest_api.rest.id
+  resource_id = aws_api_gateway_resource.chess_ready.id
+  http_method = aws_api_gateway_method.options_chess_ready.http_method
+  type        = "MOCK"
+  request_templates = { "application/json" = "{\"statusCode\": 200}" }
+}
+
+resource "aws_api_gateway_method_response" "options_chess_ready" {
+  rest_api_id = aws_api_gateway_rest_api.rest.id
+  resource_id = aws_api_gateway_resource.chess_ready.id
+  http_method = aws_api_gateway_method.options_chess_ready.http_method
+  status_code = "200"
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = true
+    "method.response.header.Access-Control-Allow-Methods" = true
+    "method.response.header.Access-Control-Allow-Origin"  = true
+  }
+}
+
+resource "aws_api_gateway_integration_response" "options_chess_ready" {
+  rest_api_id = aws_api_gateway_rest_api.rest.id
+  resource_id = aws_api_gateway_resource.chess_ready.id
+  http_method = aws_api_gateway_method.options_chess_ready.http_method
+  status_code = aws_api_gateway_method_response.options_chess_ready.status_code
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = "'Content-Type'"
+    "method.response.header.Access-Control-Allow-Methods" = "'OPTIONS,POST'"
+    "method.response.header.Access-Control-Allow-Origin"  = "'*'"
+  }
+}
+
+# POST /chess/{roomId}/move
+resource "aws_api_gateway_method" "post_chess_move" {
+  rest_api_id   = aws_api_gateway_rest_api.rest.id
+  resource_id   = aws_api_gateway_resource.chess_move.id
+  http_method   = "POST"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_integration" "post_chess_move" {
+  rest_api_id             = aws_api_gateway_rest_api.rest.id
+  resource_id             = aws_api_gateway_resource.chess_move.id
+  http_method             = aws_api_gateway_method.post_chess_move.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.chess_service.invoke_arn
+}
+
+resource "aws_api_gateway_method" "options_chess_move" {
+  rest_api_id   = aws_api_gateway_rest_api.rest.id
+  resource_id   = aws_api_gateway_resource.chess_move.id
+  http_method   = "OPTIONS"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_integration" "options_chess_move" {
+  rest_api_id = aws_api_gateway_rest_api.rest.id
+  resource_id = aws_api_gateway_resource.chess_move.id
+  http_method = aws_api_gateway_method.options_chess_move.http_method
+  type        = "MOCK"
+  request_templates = { "application/json" = "{\"statusCode\": 200}" }
+}
+
+resource "aws_api_gateway_method_response" "options_chess_move" {
+  rest_api_id = aws_api_gateway_rest_api.rest.id
+  resource_id = aws_api_gateway_resource.chess_move.id
+  http_method = aws_api_gateway_method.options_chess_move.http_method
+  status_code = "200"
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = true
+    "method.response.header.Access-Control-Allow-Methods" = true
+    "method.response.header.Access-Control-Allow-Origin"  = true
+  }
+}
+
+resource "aws_api_gateway_integration_response" "options_chess_move" {
+  rest_api_id = aws_api_gateway_rest_api.rest.id
+  resource_id = aws_api_gateway_resource.chess_move.id
+  http_method = aws_api_gateway_method.options_chess_move.http_method
+  status_code = aws_api_gateway_method_response.options_chess_move.status_code
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = "'Content-Type'"
+    "method.response.header.Access-Control-Allow-Methods" = "'OPTIONS,POST'"
+    "method.response.header.Access-Control-Allow-Origin"  = "'*'"
+  }
+}
+
+# POST /chess/{roomId}/draw
+resource "aws_api_gateway_method" "post_chess_draw" {
+  rest_api_id   = aws_api_gateway_rest_api.rest.id
+  resource_id   = aws_api_gateway_resource.chess_draw.id
+  http_method   = "POST"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_integration" "post_chess_draw" {
+  rest_api_id             = aws_api_gateway_rest_api.rest.id
+  resource_id             = aws_api_gateway_resource.chess_draw.id
+  http_method             = aws_api_gateway_method.post_chess_draw.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.chess_service.invoke_arn
+}
+
+resource "aws_api_gateway_method" "options_chess_draw" {
+  rest_api_id   = aws_api_gateway_rest_api.rest.id
+  resource_id   = aws_api_gateway_resource.chess_draw.id
+  http_method   = "OPTIONS"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_integration" "options_chess_draw" {
+  rest_api_id = aws_api_gateway_rest_api.rest.id
+  resource_id = aws_api_gateway_resource.chess_draw.id
+  http_method = aws_api_gateway_method.options_chess_draw.http_method
+  type        = "MOCK"
+  request_templates = { "application/json" = "{\"statusCode\": 200}" }
+}
+
+resource "aws_api_gateway_method_response" "options_chess_draw" {
+  rest_api_id = aws_api_gateway_rest_api.rest.id
+  resource_id = aws_api_gateway_resource.chess_draw.id
+  http_method = aws_api_gateway_method.options_chess_draw.http_method
+  status_code = "200"
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = true
+    "method.response.header.Access-Control-Allow-Methods" = true
+    "method.response.header.Access-Control-Allow-Origin"  = true
+  }
+}
+
+resource "aws_api_gateway_integration_response" "options_chess_draw" {
+  rest_api_id = aws_api_gateway_rest_api.rest.id
+  resource_id = aws_api_gateway_resource.chess_draw.id
+  http_method = aws_api_gateway_method.options_chess_draw.http_method
+  status_code = aws_api_gateway_method_response.options_chess_draw.status_code
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = "'Content-Type'"
+    "method.response.header.Access-Control-Allow-Methods" = "'OPTIONS,POST'"
+    "method.response.header.Access-Control-Allow-Origin"  = "'*'"
+  }
+}
+
+# POST /chess/{roomId}/resign
+resource "aws_api_gateway_method" "post_chess_resign" {
+  rest_api_id   = aws_api_gateway_rest_api.rest.id
+  resource_id   = aws_api_gateway_resource.chess_resign.id
+  http_method   = "POST"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_integration" "post_chess_resign" {
+  rest_api_id             = aws_api_gateway_rest_api.rest.id
+  resource_id             = aws_api_gateway_resource.chess_resign.id
+  http_method             = aws_api_gateway_method.post_chess_resign.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.chess_service.invoke_arn
+}
+
+resource "aws_api_gateway_method" "options_chess_resign" {
+  rest_api_id   = aws_api_gateway_rest_api.rest.id
+  resource_id   = aws_api_gateway_resource.chess_resign.id
+  http_method   = "OPTIONS"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_integration" "options_chess_resign" {
+  rest_api_id = aws_api_gateway_rest_api.rest.id
+  resource_id = aws_api_gateway_resource.chess_resign.id
+  http_method = aws_api_gateway_method.options_chess_resign.http_method
+  type        = "MOCK"
+  request_templates = { "application/json" = "{\"statusCode\": 200}" }
+}
+
+resource "aws_api_gateway_method_response" "options_chess_resign" {
+  rest_api_id = aws_api_gateway_rest_api.rest.id
+  resource_id = aws_api_gateway_resource.chess_resign.id
+  http_method = aws_api_gateway_method.options_chess_resign.http_method
+  status_code = "200"
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = true
+    "method.response.header.Access-Control-Allow-Methods" = true
+    "method.response.header.Access-Control-Allow-Origin"  = true
+  }
+}
+
+resource "aws_api_gateway_integration_response" "options_chess_resign" {
+  rest_api_id = aws_api_gateway_rest_api.rest.id
+  resource_id = aws_api_gateway_resource.chess_resign.id
+  http_method = aws_api_gateway_method.options_chess_resign.http_method
+  status_code = aws_api_gateway_method_response.options_chess_resign.status_code
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = "'Content-Type'"
+    "method.response.header.Access-Control-Allow-Methods" = "'OPTIONS,POST'"
+    "method.response.header.Access-Control-Allow-Origin"  = "'*'"
+  }
+}
+
+# ── Gomoku resources ──────────────────────────────────────────────────────────
+
+resource "aws_api_gateway_resource" "gomoku" {
+  rest_api_id = aws_api_gateway_rest_api.rest.id
+  parent_id   = aws_api_gateway_rest_api.rest.root_resource_id
+  path_part   = "gomoku"
+}
+
+resource "aws_api_gateway_resource" "gomoku_room_id" {
+  rest_api_id = aws_api_gateway_rest_api.rest.id
+  parent_id   = aws_api_gateway_resource.gomoku.id
+  path_part   = "{roomId}"
+}
+
+resource "aws_api_gateway_resource" "gomoku_ready" {
+  rest_api_id = aws_api_gateway_rest_api.rest.id
+  parent_id   = aws_api_gateway_resource.gomoku_room_id.id
+  path_part   = "ready"
+}
+
+resource "aws_api_gateway_resource" "gomoku_place" {
+  rest_api_id = aws_api_gateway_rest_api.rest.id
+  parent_id   = aws_api_gateway_resource.gomoku_room_id.id
+  path_part   = "place"
+}
+
+resource "aws_api_gateway_resource" "gomoku_forfeit" {
+  rest_api_id = aws_api_gateway_rest_api.rest.id
+  parent_id   = aws_api_gateway_resource.gomoku_room_id.id
+  path_part   = "forfeit"
+}
+
+# GET /gomoku/{roomId}
+resource "aws_api_gateway_method" "get_gomoku_state" {
+  rest_api_id   = aws_api_gateway_rest_api.rest.id
+  resource_id   = aws_api_gateway_resource.gomoku_room_id.id
+  http_method   = "GET"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_integration" "get_gomoku_state" {
+  rest_api_id             = aws_api_gateway_rest_api.rest.id
+  resource_id             = aws_api_gateway_resource.gomoku_room_id.id
+  http_method             = aws_api_gateway_method.get_gomoku_state.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.gomoku_service.invoke_arn
+}
+
+resource "aws_api_gateway_method" "options_gomoku_room" {
+  rest_api_id   = aws_api_gateway_rest_api.rest.id
+  resource_id   = aws_api_gateway_resource.gomoku_room_id.id
+  http_method   = "OPTIONS"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_integration" "options_gomoku_room" {
+  rest_api_id = aws_api_gateway_rest_api.rest.id
+  resource_id = aws_api_gateway_resource.gomoku_room_id.id
+  http_method = aws_api_gateway_method.options_gomoku_room.http_method
+  type        = "MOCK"
+  request_templates = { "application/json" = "{\"statusCode\": 200}" }
+}
+
+resource "aws_api_gateway_method_response" "options_gomoku_room" {
+  rest_api_id = aws_api_gateway_rest_api.rest.id
+  resource_id = aws_api_gateway_resource.gomoku_room_id.id
+  http_method = aws_api_gateway_method.options_gomoku_room.http_method
+  status_code = "200"
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = true
+    "method.response.header.Access-Control-Allow-Methods" = true
+    "method.response.header.Access-Control-Allow-Origin"  = true
+  }
+}
+
+resource "aws_api_gateway_integration_response" "options_gomoku_room" {
+  rest_api_id = aws_api_gateway_rest_api.rest.id
+  resource_id = aws_api_gateway_resource.gomoku_room_id.id
+  http_method = aws_api_gateway_method.options_gomoku_room.http_method
+  status_code = aws_api_gateway_method_response.options_gomoku_room.status_code
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = "'Content-Type'"
+    "method.response.header.Access-Control-Allow-Methods" = "'OPTIONS,GET'"
+    "method.response.header.Access-Control-Allow-Origin"  = "'*'"
+  }
+}
+
+# POST /gomoku/{roomId}/ready
+resource "aws_api_gateway_method" "post_gomoku_ready" {
+  rest_api_id   = aws_api_gateway_rest_api.rest.id
+  resource_id   = aws_api_gateway_resource.gomoku_ready.id
+  http_method   = "POST"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_integration" "post_gomoku_ready" {
+  rest_api_id             = aws_api_gateway_rest_api.rest.id
+  resource_id             = aws_api_gateway_resource.gomoku_ready.id
+  http_method             = aws_api_gateway_method.post_gomoku_ready.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.gomoku_service.invoke_arn
+}
+
+resource "aws_api_gateway_method" "options_gomoku_ready" {
+  rest_api_id   = aws_api_gateway_rest_api.rest.id
+  resource_id   = aws_api_gateway_resource.gomoku_ready.id
+  http_method   = "OPTIONS"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_integration" "options_gomoku_ready" {
+  rest_api_id = aws_api_gateway_rest_api.rest.id
+  resource_id = aws_api_gateway_resource.gomoku_ready.id
+  http_method = aws_api_gateway_method.options_gomoku_ready.http_method
+  type        = "MOCK"
+  request_templates = { "application/json" = "{\"statusCode\": 200}" }
+}
+
+resource "aws_api_gateway_method_response" "options_gomoku_ready" {
+  rest_api_id = aws_api_gateway_rest_api.rest.id
+  resource_id = aws_api_gateway_resource.gomoku_ready.id
+  http_method = aws_api_gateway_method.options_gomoku_ready.http_method
+  status_code = "200"
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = true
+    "method.response.header.Access-Control-Allow-Methods" = true
+    "method.response.header.Access-Control-Allow-Origin"  = true
+  }
+}
+
+resource "aws_api_gateway_integration_response" "options_gomoku_ready" {
+  rest_api_id = aws_api_gateway_rest_api.rest.id
+  resource_id = aws_api_gateway_resource.gomoku_ready.id
+  http_method = aws_api_gateway_method.options_gomoku_ready.http_method
+  status_code = aws_api_gateway_method_response.options_gomoku_ready.status_code
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = "'Content-Type'"
+    "method.response.header.Access-Control-Allow-Methods" = "'OPTIONS,POST'"
+    "method.response.header.Access-Control-Allow-Origin"  = "'*'"
+  }
+}
+
+# POST /gomoku/{roomId}/place
+resource "aws_api_gateway_method" "post_gomoku_place" {
+  rest_api_id   = aws_api_gateway_rest_api.rest.id
+  resource_id   = aws_api_gateway_resource.gomoku_place.id
+  http_method   = "POST"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_integration" "post_gomoku_place" {
+  rest_api_id             = aws_api_gateway_rest_api.rest.id
+  resource_id             = aws_api_gateway_resource.gomoku_place.id
+  http_method             = aws_api_gateway_method.post_gomoku_place.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.gomoku_service.invoke_arn
+}
+
+resource "aws_api_gateway_method" "options_gomoku_place" {
+  rest_api_id   = aws_api_gateway_rest_api.rest.id
+  resource_id   = aws_api_gateway_resource.gomoku_place.id
+  http_method   = "OPTIONS"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_integration" "options_gomoku_place" {
+  rest_api_id = aws_api_gateway_rest_api.rest.id
+  resource_id = aws_api_gateway_resource.gomoku_place.id
+  http_method = aws_api_gateway_method.options_gomoku_place.http_method
+  type        = "MOCK"
+  request_templates = { "application/json" = "{\"statusCode\": 200}" }
+}
+
+resource "aws_api_gateway_method_response" "options_gomoku_place" {
+  rest_api_id = aws_api_gateway_rest_api.rest.id
+  resource_id = aws_api_gateway_resource.gomoku_place.id
+  http_method = aws_api_gateway_method.options_gomoku_place.http_method
+  status_code = "200"
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = true
+    "method.response.header.Access-Control-Allow-Methods" = true
+    "method.response.header.Access-Control-Allow-Origin"  = true
+  }
+}
+
+resource "aws_api_gateway_integration_response" "options_gomoku_place" {
+  rest_api_id = aws_api_gateway_rest_api.rest.id
+  resource_id = aws_api_gateway_resource.gomoku_place.id
+  http_method = aws_api_gateway_method.options_gomoku_place.http_method
+  status_code = aws_api_gateway_method_response.options_gomoku_place.status_code
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = "'Content-Type'"
+    "method.response.header.Access-Control-Allow-Methods" = "'OPTIONS,POST'"
+    "method.response.header.Access-Control-Allow-Origin"  = "'*'"
+  }
+}
+
+# POST /gomoku/{roomId}/forfeit
+resource "aws_api_gateway_method" "post_gomoku_forfeit" {
+  rest_api_id   = aws_api_gateway_rest_api.rest.id
+  resource_id   = aws_api_gateway_resource.gomoku_forfeit.id
+  http_method   = "POST"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_integration" "post_gomoku_forfeit" {
+  rest_api_id             = aws_api_gateway_rest_api.rest.id
+  resource_id             = aws_api_gateway_resource.gomoku_forfeit.id
+  http_method             = aws_api_gateway_method.post_gomoku_forfeit.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.gomoku_service.invoke_arn
+}
+
+resource "aws_api_gateway_method" "options_gomoku_forfeit" {
+  rest_api_id   = aws_api_gateway_rest_api.rest.id
+  resource_id   = aws_api_gateway_resource.gomoku_forfeit.id
+  http_method   = "OPTIONS"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_integration" "options_gomoku_forfeit" {
+  rest_api_id = aws_api_gateway_rest_api.rest.id
+  resource_id = aws_api_gateway_resource.gomoku_forfeit.id
+  http_method = aws_api_gateway_method.options_gomoku_forfeit.http_method
+  type        = "MOCK"
+  request_templates = { "application/json" = "{\"statusCode\": 200}" }
+}
+
+resource "aws_api_gateway_method_response" "options_gomoku_forfeit" {
+  rest_api_id = aws_api_gateway_rest_api.rest.id
+  resource_id = aws_api_gateway_resource.gomoku_forfeit.id
+  http_method = aws_api_gateway_method.options_gomoku_forfeit.http_method
+  status_code = "200"
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = true
+    "method.response.header.Access-Control-Allow-Methods" = true
+    "method.response.header.Access-Control-Allow-Origin"  = true
+  }
+}
+
+resource "aws_api_gateway_integration_response" "options_gomoku_forfeit" {
+  rest_api_id = aws_api_gateway_rest_api.rest.id
+  resource_id = aws_api_gateway_resource.gomoku_forfeit.id
+  http_method = aws_api_gateway_method.options_gomoku_forfeit.http_method
+  status_code = aws_api_gateway_method_response.options_gomoku_forfeit.status_code
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = "'Content-Type'"
+    "method.response.header.Access-Control-Allow-Methods" = "'OPTIONS,POST'"
+    "method.response.header.Access-Control-Allow-Origin"  = "'*'"
+  }
+}
+
 # Lambda permissions for REST API
 resource "aws_lambda_permission" "rest_room_service" {
   statement_id  = "AllowRestAPIInvoke"
@@ -625,6 +1199,22 @@ resource "aws_lambda_permission" "rest_battleship_service" {
   statement_id  = "AllowRestBattleshipAPIInvoke"
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.battleship_service.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_api_gateway_rest_api.rest.execution_arn}/*/*"
+}
+
+resource "aws_lambda_permission" "rest_chess_service" {
+  statement_id  = "AllowRestChessAPIInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.chess_service.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_api_gateway_rest_api.rest.execution_arn}/*/*"
+}
+
+resource "aws_lambda_permission" "rest_gomoku_service" {
+  statement_id  = "AllowRestGomokuAPIInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.gomoku_service.function_name
   principal     = "apigateway.amazonaws.com"
   source_arn    = "${aws_api_gateway_rest_api.rest.execution_arn}/*/*"
 }
@@ -653,6 +1243,24 @@ resource "aws_api_gateway_deployment" "rest" {
       aws_api_gateway_integration_response.options_battleship_setup.id,
       aws_api_gateway_integration_response.options_battleship_fire.id,
       aws_api_gateway_integration_response.options_battleship_forfeit.id,
+      aws_api_gateway_integration.get_chess_state.id,
+      aws_api_gateway_integration.post_chess_ready.id,
+      aws_api_gateway_integration.post_chess_move.id,
+      aws_api_gateway_integration.post_chess_draw.id,
+      aws_api_gateway_integration.post_chess_resign.id,
+      aws_api_gateway_integration_response.options_chess_room.id,
+      aws_api_gateway_integration_response.options_chess_ready.id,
+      aws_api_gateway_integration_response.options_chess_move.id,
+      aws_api_gateway_integration_response.options_chess_draw.id,
+      aws_api_gateway_integration_response.options_chess_resign.id,
+      aws_api_gateway_integration.get_gomoku_state.id,
+      aws_api_gateway_integration.post_gomoku_ready.id,
+      aws_api_gateway_integration.post_gomoku_place.id,
+      aws_api_gateway_integration.post_gomoku_forfeit.id,
+      aws_api_gateway_integration_response.options_gomoku_room.id,
+      aws_api_gateway_integration_response.options_gomoku_ready.id,
+      aws_api_gateway_integration_response.options_gomoku_place.id,
+      aws_api_gateway_integration_response.options_gomoku_forfeit.id,
     ]))
   }
 
@@ -679,6 +1287,24 @@ resource "aws_api_gateway_deployment" "rest" {
     aws_api_gateway_integration_response.options_battleship_setup,
     aws_api_gateway_integration_response.options_battleship_fire,
     aws_api_gateway_integration_response.options_battleship_forfeit,
+    aws_api_gateway_integration.get_chess_state,
+    aws_api_gateway_integration.post_chess_ready,
+    aws_api_gateway_integration.post_chess_move,
+    aws_api_gateway_integration.post_chess_draw,
+    aws_api_gateway_integration.post_chess_resign,
+    aws_api_gateway_integration_response.options_chess_room,
+    aws_api_gateway_integration_response.options_chess_ready,
+    aws_api_gateway_integration_response.options_chess_move,
+    aws_api_gateway_integration_response.options_chess_draw,
+    aws_api_gateway_integration_response.options_chess_resign,
+    aws_api_gateway_integration.get_gomoku_state,
+    aws_api_gateway_integration.post_gomoku_ready,
+    aws_api_gateway_integration.post_gomoku_place,
+    aws_api_gateway_integration.post_gomoku_forfeit,
+    aws_api_gateway_integration_response.options_gomoku_room,
+    aws_api_gateway_integration_response.options_gomoku_ready,
+    aws_api_gateway_integration_response.options_gomoku_place,
+    aws_api_gateway_integration_response.options_gomoku_forfeit,
   ]
 }
 
